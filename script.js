@@ -23,7 +23,7 @@ const inputCount = document.querySelector("#inputCount");
 const outputCount = document.querySelector("#outputCount");
 const releaseStamp = document.querySelector("#releaseStamp");
 
-const appRelease = "20260709-2041";
+const appRelease = "20260709-2104";
 const MAX_INPUT_BYTES = 10_000_000;
 
 const presets = {
