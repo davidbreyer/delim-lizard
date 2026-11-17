@@ -6,6 +6,8 @@ Features include custom delimiters, single/double/bracket wrapping, list prefixe
 
 Open `index.html` directly or serve the folder with any static web server. All processing remains in the browser.
 
+Delim Lizard remembers the last input and settings in the current browser and rebuilds the output when reopened. **Clear** empties both editors.
+
 ## GitHub Pages
 
 The intended deployment uses `master` for source and `gh-pages` for the public site:

@@ -22,9 +22,14 @@ const stats = document.querySelector("#stats");
 const inputCount = document.querySelector("#inputCount");
 const outputCount = document.querySelector("#outputCount");
 const releaseStamp = document.querySelector("#releaseStamp");
+const workspaceStatus = document.querySelector("#workspaceStatus");
 
-const appRelease = "20260709-2104";
+const appRelease = "20261117-0415";
 const MAX_INPUT_BYTES = 10_000_000;
+const workspaceStorageKey = "delim-lizard.workspace.v1";
+const textSettings = [preset, delimiter, customDelimiter, quoteStyle, prefix, suffix, inputSeparator, customInputSeparator];
+const cleanupSettings = [trimValues, removeBlanks, removeDuplicates, sortValues];
+let workspaceSaveTimer = null;
 
 const presets = {
   sql: { delimiter: ",", quoteStyle: "single", prefix: "IN (", suffix: ")" },
@@ -46,25 +51,88 @@ const separatorValues = {
   pipe: "|"
 };
 
-sourceInput.addEventListener("input", buildOutput);
-[delimiter, quoteStyle, prefix, suffix, trimValues, removeBlanks, removeDuplicates, sortValues]
+sourceInput.addEventListener("input", rebuildWorkspace);
+[delimiter, customDelimiter, quoteStyle, prefix, suffix, ...cleanupSettings]
   .forEach((control) => control.addEventListener("input", handleOutputControl));
-inputSeparator.addEventListener("change", handleInputSeparatorChange);
-customInputSeparator.addEventListener("input", buildOutput);
-customDelimiter.addEventListener("input", handleOutputControl);
+inputSeparator.addEventListener("change", rebuildWorkspace);
+customInputSeparator.addEventListener("input", rebuildWorkspace);
 preset.addEventListener("change", applyPreset);
 openButton.addEventListener("click", () => fileInput.click());
 fileInput.addEventListener("change", openSelectedFile);
 copyButton.addEventListener("click", copyOutput);
 saveButton.addEventListener("click", saveOutput);
 clearButton.addEventListener("click", clearEditors);
+window.addEventListener("pagehide", flushWorkspaceSave);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) flushWorkspaceSave();
+});
 
 renderReleaseStamp();
 applyPresetValue("sql");
 removeDuplicates.checked = true;
+restoreWorkspace();
 buildOutput();
 
+function restoreWorkspace() {
+  let workspace;
+  try {
+    const raw = localStorage.getItem(workspaceStorageKey);
+    if (raw === null) return;
+    workspace = JSON.parse(raw);
+    if (typeof workspace?.input !== "string" || !workspace.settings || typeof workspace.settings !== "object") {
+      throw new Error("Invalid workspace");
+    }
+  } catch {
+    setWorkspaceStatus("Could not restore the saved workspace.");
+    return;
+  }
+
+  sourceInput.value = workspace.input;
+  for (const control of textSettings) {
+    const value = workspace.settings[control.id];
+    if (typeof value !== "string") continue;
+    if (control instanceof HTMLSelectElement && !Array.from(control.options).some((option) => option.value === value)) continue;
+    control.value = value;
+  }
+  for (const control of cleanupSettings) {
+    const value = workspace.settings[control.id];
+    if (typeof value === "boolean") control.checked = value;
+  }
+  setWorkspaceStatus("Workspace saved in this browser.");
+}
+
+function rebuildWorkspace() {
+  buildOutput();
+  clearTimeout(workspaceSaveTimer);
+  workspaceSaveTimer = setTimeout(saveWorkspace, 250);
+}
+
+function saveWorkspace() {
+  clearTimeout(workspaceSaveTimer);
+  workspaceSaveTimer = null;
+  const settings = Object.fromEntries([
+    ...textSettings.map((control) => [control.id, control.value]),
+    ...cleanupSettings.map((control) => [control.id, control.checked])
+  ]);
+  try {
+    localStorage.setItem(workspaceStorageKey, JSON.stringify({ input: sourceInput.value, settings }));
+    setWorkspaceStatus("Workspace saved in this browser.");
+  } catch {
+    setWorkspaceStatus("Workspace changes could not be saved.");
+  }
+}
+
+function flushWorkspaceSave() {
+  if (workspaceSaveTimer !== null) saveWorkspace();
+}
+
+function setWorkspaceStatus(message) {
+  if (workspaceStatus.textContent !== message) workspaceStatus.textContent = message;
+}
+
 function buildOutput() {
+  customDelimiter.classList.toggle("hidden", delimiter.value !== "custom");
+  customInputSeparator.classList.toggle("hidden", inputSeparator.value !== "custom");
   if (getTextSize(sourceInput.value) > MAX_INPUT_BYTES) {
     formattedOutput.value = "";
     setStatus("Input exceeds the 10 MB limit.", "error");
@@ -96,7 +164,7 @@ function buildOutput() {
 }
 
 function prepareValues(input) {
-  let values = splitInput(input);
+  let values = input ? splitInput(input) : [];
   const originalCount = values.length;
 
   if (trimValues.checked) {
@@ -179,22 +247,13 @@ function getDelimiter() {
 }
 
 function handleOutputControl() {
-  customDelimiter.classList.toggle("hidden", delimiter.value !== "custom");
   preset.value = "custom";
-  buildOutput();
-}
-
-function handleInputSeparatorChange() {
-  customInputSeparator.classList.toggle("hidden", inputSeparator.value !== "custom");
-  buildOutput();
+  rebuildWorkspace();
 }
 
 function applyPreset() {
-  if (preset.value === "custom") {
-    return;
-  }
-  applyPresetValue(preset.value);
-  buildOutput();
+  if (preset.value !== "custom") applyPresetValue(preset.value);
+  rebuildWorkspace();
 }
 
 function applyPresetValue(name) {
@@ -206,7 +265,6 @@ function applyPresetValue(name) {
   quoteStyle.value = values.quoteStyle;
   prefix.value = values.prefix;
   suffix.value = values.suffix;
-  customDelimiter.classList.add("hidden");
   preset.value = name;
 }
 
@@ -228,7 +286,8 @@ async function openSelectedFile() {
     } else if (/\.tsv$/i.test(file.name)) {
       inputSeparator.value = "tab";
     }
-    handleInputSeparatorChange();
+    buildOutput();
+    saveWorkspace();
     setStatus(`Opened ${file.name}`, "valid");
   } catch {
     setStatus("Could not open file", "error");
@@ -268,8 +327,8 @@ function saveOutput() {
 
 function clearEditors() {
   sourceInput.value = "";
-  formattedOutput.value = "";
   buildOutput();
+  saveWorkspace();
   sourceInput.focus();
 }
 
