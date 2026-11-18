@@ -24,7 +24,7 @@ const outputCount = document.querySelector("#outputCount");
 const releaseStamp = document.querySelector("#releaseStamp");
 const workspaceStatus = document.querySelector("#workspaceStatus");
 
-const appRelease = "20261117-0415";
+const appRelease = "20261118-0943";
 const MAX_INPUT_BYTES = 10_000_000;
 const workspaceStorageKey = "delim-lizard.workspace.v1";
 const textSettings = [preset, delimiter, customDelimiter, quoteStyle, prefix, suffix, inputSeparator, customInputSeparator];
